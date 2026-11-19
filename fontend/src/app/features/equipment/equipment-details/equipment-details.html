@@ -1,0 +1,49 @@
+<div class="details-page">
+
+  <a routerLink="/" class="back-link">← Back to Home</a>
+
+  <p class="state-msg" *ngIf="loading()">Loading...</p>
+
+  <p class="state-msg" *ngIf="notFound()">Equipment not found.</p>
+
+  <div class="details-card" *ngIf="equipment() as e">
+
+    <div class="details-image">
+      <img *ngIf="e.image" [src]="imageBase + e.image" [alt]="e.name">
+      <div class="no-image" *ngIf="!e.image">🔬</div>
+    </div>
+
+    <div class="details-info">
+      <span class="tag">{{ e.category }}</span>
+      <h1>{{ e.name }}</h1>
+      <p class="description">{{ e.description }}</p>
+
+      <div class="info-row">
+        <span>Quantity</span>
+        <strong>{{ e.quantity }}</strong>
+      </div>
+
+      <div class="info-row">
+        <span>Status</span>
+        <span class="status"
+          [class.ok]="e.status === 'Available'"
+          [class.ko]="e.status !== 'Available'">
+          {{ e.status }}
+        </span>
+      </div>
+
+      <a
+        *ngIf="e.status === 'Available'"
+        [routerLink]="['/booking', e.id]"
+        class="book-btn">
+        Book this equipment
+      </a>
+
+      <span class="book-btn disabled" *ngIf="e.status !== 'Available'">
+        Not available
+      </span>
+    </div>
+
+  </div>
+
+</div>

@@ -1,0 +1,180 @@
+<div class="toast" *ngIf="toast" [class.success]="toast.type === 'success'" [class.error-toast]="toast.type === 'error'">
+  <span>{{ toast.text }}</span>
+  <button type="button" (click)="closeToast()">✕</button>
+</div>
+
+<div class="modal-backdrop" *ngIf="deleteTarget" (click)="cancelDelete()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <h3>Delete equipment?</h3>
+    <p>
+      <strong>{{ deleteTarget.name }}</strong> will be permanently removed,
+      including all its stock ({{ deleteTarget.quantity }} units).
+    </p>
+    <div class="modal-actions">
+      <button type="button" class="cancel-btn" (click)="cancelDelete()">Cancel</button>
+      <button type="button" class="danger-btn" (click)="confirmDelete()">Delete all</button>
+    </div>
+  </div>
+</div>
+
+<div class="page-container">
+
+  <header class="page-header">
+    <div>
+      <h1>My Equipment</h1>
+      <p>Manage your laboratory equipment</p>
+    </div>
+  </header>
+
+  <section class="form-section">
+    <div class="section-heading">
+      <div>
+        <h2>{{ editingId === null ? 'Add New Equipment' : 'Update Equipment' }}</h2>
+        <p>Enter the equipment information below</p>
+      </div>
+    </div>
+
+    <form [formGroup]="equipmentForm" (ngSubmit)="saveEquipment()">
+
+      <div class="form-grid">
+
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" formControlName="name" placeholder="Equipment name">
+          <small class="error" *ngIf="equipmentForm.get('name')?.touched && equipmentForm.get('name')?.invalid">
+            Name is required
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label>Category</label>
+          <input type="text" formControlName="category" placeholder="Equipment category">
+          <small class="error" *ngIf="equipmentForm.get('category')?.touched && equipmentForm.get('category')?.invalid">
+            Category is required
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label>Quantity</label>
+          <input type="number" formControlName="quantity" min="0">
+          <small class="error" *ngIf="equipmentForm.get('quantity')?.touched && equipmentForm.get('quantity')?.invalid">
+            Quantity must be 0 or more
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label>Status</label>
+          <select formControlName="status">
+            <option value="Available">Available</option>
+            <option value="Unavailable">Unavailable</option>
+          </select>
+        </div>
+
+        <div class="form-group full-width">
+          <label>Description</label>
+          <textarea formControlName="description" rows="3" placeholder="Describe the equipment..."></textarea>
+          <small class="error" *ngIf="equipmentForm.get('description')?.touched && equipmentForm.get('description')?.invalid">
+            Description is required
+          </small>
+        </div>
+
+        <div class="form-group full-width">
+          <label>Equipment Image</label>
+          <input
+            #fileInput
+            type="file"
+            accept="image/*"
+            (change)="onFileSelected($event)"
+          >
+          <img *ngIf="previewUrl" [src]="previewUrl" alt="Preview" class="preview-img">
+          <p class="image-hint" *ngIf="editingId !== null">
+            If you don't select a new image, the previous image will be kept.
+          </p>
+        </div>
+
+      </div>
+
+      <div class="form-actions">
+        <button class="primary-btn" type="submit" [disabled]="equipmentForm.invalid">
+          {{ editingId === null ? '＋ Add Equipment' : 'Save Changes' }}
+        </button>
+
+        <button class="cancel-btn" type="button" *ngIf="editingId !== null" (click)="resetForm()">
+          Cancel
+        </button>
+      </div>
+
+    </form>
+  </section>
+
+  <section class="equipment-section">
+
+    <div class="section-heading">
+      <div>
+        <h2>Equipment List</h2>
+        <p>All laboratory equipment</p>
+      </div>
+      <span class="count">{{ equipments.length }} Items</span>
+    </div>
+
+    <p class="empty-message" *ngIf="equipments.length === 0">
+      No equipment available yet.
+    </p>
+
+    <div class="equipment-grid">
+
+      <div class="equipment-card" *ngFor="let equipment of equipments">
+
+        <div class="image-container">
+
+          <img
+            *ngIf="equipment.image"
+            [src]="'http://localhost:3000/uploads/' + equipment.image"
+            [alt]="equipment.name"
+          >
+
+          <div class="no-image" *ngIf="!equipment.image">
+            <span>🔬</span>
+            <p>No image</p>
+          </div>
+
+          <span class="status-badge"
+            [class.available]="equipment.status === 'Available'"
+            [class.unavailable]="equipment.status !== 'Available'">
+            {{ equipment.status }}
+          </span>
+
+        </div>
+
+        <div class="card-content">
+
+          <span class="category-label">{{ equipment.category }}</span>
+
+          <h3>{{ equipment.name }}</h3>
+
+          <p class="description">{{ equipment.description }}</p>
+
+          <div class="card-info">
+            <span>Quantity</span>
+            <strong>{{ equipment.quantity }}</strong>
+          </div>
+
+          <div class="card-actions">
+            <button type="button" class="edit-btn" (click)="editEquipment(equipment)">
+              Edit
+            </button>
+
+            <button type="button" class="delete-btn" (click)="askDelete(equipment)">
+              Delete
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+</div>
