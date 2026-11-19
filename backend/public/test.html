@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>اختبار الحجوزات</title>
+<style>
+  :root {
+    --paper: #f3f1ec; --card: #ffffff; --ink: #1d2a2f; --muted: #66767c;
+    --line: #d9d5cb; --brand: #0f5c63; --ok: #1b7a3d; --warn: #a15c00; --bad: #b3261e;
+    --font: Tahoma, "Segoe UI", "Noto Sans Arabic", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 1.5rem 1rem 3rem; background: var(--paper); color: var(--ink); font-family: var(--font); line-height: 1.6; }
+  main { max-width: 760px; margin: 0 auto; display: grid; gap: 1rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.1rem; margin: 0 0 .75rem; }
+  p.sub { margin: 0; color: var(--muted); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1.1rem 1.25rem; }
+  label { display: grid; gap: .3rem; font-weight: 600; font-size: .92rem; }
+  input { font: inherit; padding: .55rem .6rem; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); direction: ltr; text-align: left; }
+  input:focus-visible, button:focus-visible { outline: 3px solid #7fc4ca; outline-offset: 1px; }
+  .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+  .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .9rem; }
+  button { font: inherit; padding: .55rem 1rem; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--brand); }
+  button.danger { background: var(--bad); border-color: var(--bad); padding: .3rem .7rem; font-size: .85rem; }
+  button:disabled { opacity: .55; cursor: wait; }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: right; padding: .55rem .4rem; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  td.ltr { direction: ltr; text-align: right; }
+  .empty { color: var(--muted); margin: 0; }
+  #status { margin: .9rem 0 0; padding: .6rem .75rem; border-radius: 4px; border: 1px solid var(--line); background: #faf9f6; min-height: 2.6rem; }
+  #status.s2 { border-color: var(--ok); color: var(--ok); }
+  #status.s4 { border-color: var(--warn); color: var(--warn); }
+  #status.s5 { border-color: var(--bad); color: var(--bad); }
+  #status code { direction: ltr; unicode-bidi: embed; }
+  .test { display: grid; grid-template-columns: 1fr auto auto; gap: .5rem; padding: .4rem 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
+  .pass { color: var(--ok); font-weight: 700; } .fail { color: var(--bad); font-weight: 700; }
+  .api { margin-top: .75rem; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>اختبار نظام الحجز</h1>
+    <p class="sub">صفحة صغيرة للتأكد أن الخادم والقاعدة والتحقق من التعارض تعمل.</p>
+  </header>
+
+  <section>
+    <h2>عنوان الخادم</h2>
+    <label>رابط الـ API
+      <input id="api" type="text" autocomplete="off">
+    </label>
+  </section>
+
+  <section>
+    <h2>حجز جديد</h2>
+    <div class="row">
+      <label>رقم المعدّة <input id="eq" type="number" min="1" value="1"></label>
+      <label>من تاريخ <input id="start" type="date"></label>
+      <label>إلى تاريخ <input id="end" type="date"></label>
+    </div>
+    <div class="actions">
+      <button id="book">احجز</button>
+    </div>
+    <p id="status" role="status" aria-live="polite">لم يتم إرسال أي طلب بعد.</p>
+  </section>
+
+  <section>
+    <h2>حجوزاتي النشطة</h2>
+    <div class="actions" style="margin:0 0 .75rem">
+      <button id="refresh" class="ghost">تحديث القائمة</button>
+    </div>
+    <div id="list"><p class="empty">اضغط «تحديث القائمة».</p></div>
+  </section>
+
+  <section>
+    <h2>اختبارات تلقائية للتعارض</h2>
+    <p class="sub">تنشئ حجوزات تجريبية على المعدّتين 9999 و10000 في يناير 2030 ثم تحذفها.</p>
+    <div class="actions"><button id="run">شغّل الاختبارات</button></div>
+    <div id="results" class="api"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const defaultApi = (location.protocol.startsWith('http') ? location.origin : 'http://localhost:3000') + '/api/reservations';
+$('api').value = defaultApi;
+
+const today = new Date().toISOString().slice(0, 10);
+const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+$('start').value = today; $('end').value = tomorrow;
+
+const base = () => $('api').value.replace(/\/$/, '');
+
+async function call(method, path = '', body) {
+  const res = await fetch(base() + path, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  let data = null;
+  const text = await res.text();
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  return { status: res.status, data };
+}
+
+function show(status, data) {
+  const el = $('status');
+  el.className = 's' + String(status)[0];
+  const meaning = { 201: 'تم الحجز', 200: 'تم', 204: 'تم الحذف', 400: 'تواريخ غير صحيحة', 409: 'تعارض: المعدّة محجوزة في هذه الفترة', 404: 'غير موجود', 500: 'خطأ في الخادم أو القاعدة' }[status] || 'استجابة';
+  const msg = data && data.message ? data.message : '';
+  el.innerHTML = '';
+  const strong = document.createElement('strong'); strong.textContent = status + ' - ' + meaning;
+  el.append(strong);
+  if (msg) { el.append(document.createElement('br')); const c = document.createElement('code'); c.textContent = msg; el.append(c); }
+}
+
+function networkError(err) {
+  const el = $('status');
+  el.className = 's5';
+  el.textContent = 'تعذّر الاتصال بالخادم. تأكد أن node server.js يعمل وأن الرابط صحيح، وأن CORS يسمح بهذه الصفحة. (' + err.message + ')';
+}
+
+$('book').onclick = async () => {
+  $('book').disabled = true;
+  try {
+    const r = await call('POST', '', { equipment_id: Number($('eq').value), start_date: $('start').value, end_date: $('end').value });
+    show(r.status, r.data);
+    if (r.status === 201) loadList();
+  } catch (e) { networkError(e); }
+  $('book').disabled = false;
+};
+
+async function loadList() {
+  const box = $('list');
+  try {
+    const r = await call('GET', '/mine');
+    if (r.status !== 200) { box.innerHTML = '<p class="empty">تعذّر تحميل الحجوزات (' + r.status + ').</p>'; return; }
+    if (!r.data.length) { box.innerHTML = '<p class="empty">لا توجد حجوزات نشطة.</p>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th>المعدّة</th><th>من</th><th>إلى</th><th></th></tr></thead>';
+    const tb = document.createElement('tbody');
+    r.data.forEach((x) => {
+      const tr = document.createElement('tr');
+      const name = x.equipment_name || ('#' + x.equipment_id);
+      [name, String(x.start_date).slice(0, 10), String(x.end_date).slice(0, 10)].forEach((t, i) => {
+        const td = document.createElement('td'); td.textContent = t; if (i) td.className = 'ltr'; tr.append(td);
+      });
+      const td = document.createElement('td');
+      const b = document.createElement('button'); b.className = 'danger'; b.textContent = 'إلغاء';
+      b.onclick = async () => { const d = await call('DELETE', '/' + x.id); show(d.status, d.data); loadList(); };
+      td.append(b); tr.append(td); tb.append(tr);
+    });
+    table.append(tb); box.innerHTML = ''; box.append(table);
+  } catch (e) { box.innerHTML = ''; const p = document.createElement('p'); p.className = 'empty'; p.textContent = 'تعذّر الاتصال بالخادم.'; box.append(p); }
+}
+$('refresh').onclick = loadList;
+
+const cases = [
+  ['حجز 10-15 يناير (أول حجز)', 9999, '2030-01-10', '2030-01-15', 201],
+  ['فترة متداخلة جزئياً 12-18', 9999, '2030-01-12', '2030-01-18', 409],
+  ['فترة مطابقة تماماً 10-15', 9999, '2030-01-10', '2030-01-15', 409],
+  ['فترة داخل الحجز 11-13', 9999, '2030-01-11', '2030-01-13', 409],
+  ['تبدأ عند نهاية الحجز 15-18', 9999, '2030-01-15', '2030-01-18', 201],
+  ['فترة بعيدة 20-22', 9999, '2030-01-20', '2030-01-22', 201],
+  ['معدّة مختلفة بنفس التواريخ', 10000, '2030-01-12', '2030-01-18', 201],
+  ['نهاية قبل البداية', 9999, '2030-01-18', '2030-01-12', 400]
+];
+
+$('run').onclick = async () => {
+  const out = $('results'); out.innerHTML = ''; $('run').disabled = true;
+  const created = [];
+  try {
+    for (const [label, eq, s, e, expected] of cases) {
+      const r = await call('POST', '', { equipment_id: eq, start_date: s, end_date: e });
+      if (r.status === 201 && r.data && r.data.id) created.push(r.data.id);
+      const ok = r.status === expected;
+      const row = document.createElement('div'); row.className = 'test';
+      const a = document.createElement('span'); a.textContent = label;
+      const b = document.createElement('span'); b.textContent = 'المتوقع ' + expected + ' / الفعلي ' + r.status; b.style.direction = 'ltr';
+      const c = document.createElement('span'); c.className = ok ? 'pass' : 'fail'; c.textContent = ok ? 'نجح' : 'فشل';
+      row.append(a, b, c); out.append(row);
+    }
+  } catch (e) {
+    out.textContent = 'تعذّر الاتصال بالخادم: ' + e.message;
+  }
+  for (const id of created) { try { await call('DELETE', '/' + id); } catch {} }
+  $('run').disabled = false; loadList();
+};
+</script>
+</body>
+</html>
